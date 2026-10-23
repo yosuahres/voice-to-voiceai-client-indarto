@@ -1,0 +1,12 @@
+.venv/
+frontend/node_modules/
+frontend/.next/
+__pycache__/
+*.pyc
+out/
+*.wav
+!samples/*.wav
+.env
+*.tsbuildinfo
+*.m4a
+.DS_Store
