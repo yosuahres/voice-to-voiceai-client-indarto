@@ -15,6 +15,8 @@ type Entry = {
 };
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+// ngrok's free plan serves a browser warning page instead of the API unless this header is sent.
+const API_HEADERS = { "ngrok-skip-browser-warning": "1" };
 const languages: Language[] = ["Indonesian", "Russian"];
 const voices = ["M1", "M2", "M3", "M4", "M5", "F1", "F2", "F3", "F4", "F5"];
 const MIC_RESUME_DELAY_MS = 300;
@@ -265,7 +267,7 @@ export default function Home() {
       form.append("file", wav, "phrase.wav");
       form.append("direction", phraseDirection);
       form.append("voice", phraseVoice);
-      const response = await fetch(`${API_URL}/translate`, { method: "POST", body: form });
+      const response = await fetch(`${API_URL}/translate`, { method: "POST", headers: API_HEADERS, body: form });
       if (!response.ok) throw new Error((await response.text()) || `Translation failed (${response.status})`);
       const result = (await response.json()) as {
         transcript: string;
