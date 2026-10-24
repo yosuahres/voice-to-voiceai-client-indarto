@@ -2,11 +2,12 @@
 
 import threading
 import time
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 
 import numpy as np
 
-from .asr import Transcriber
+from .asr import Transcriber, phrases
 from .audio import ASR_SAMPLE_RATE, decode_to_pcm16k, duration_seconds, to_wav_bytes
 from .config import DIRECTIONS
 from .mt import Translator
@@ -49,9 +50,7 @@ class Pipeline:
         self._lock = threading.Lock()
 
     def run(self, audio_bytes: bytes, direction: str, voice: str | None = None) -> Result:
-        if direction not in DIRECTIONS:
-            raise ValueError(f"direction must be one of {sorted(DIRECTIONS)}")
-        src, dst = DIRECTIONS[direction]
+        src, dst = _languages(direction)
         timings: dict[str, float] = {}
 
         with self._lock:
@@ -64,16 +63,41 @@ class Pipeline:
             transcript = self.asr.transcribe(pcm, language=src)
             timings["asr"] = time.perf_counter() - t
 
-            t = time.perf_counter()
-            translation = self.mt.translate(transcript, src, dst)
-            timings["mt"] = time.perf_counter() - t
+            return self._dub(transcript, direction, voice, timings)
 
+    def run_long(
+        self,
+        pcm: np.ndarray,
+        direction: str,
+        voice: str | None = None,
+        stop: threading.Event | None = None,
+    ) -> Iterator[Result]:
+        """Translate a long recording (16 kHz mono float32) phrase by phrase, yielding each
+        dubbed phrase as soon as it is ready. Set `stop` to give up after the current phrase."""
+        src, _dst = _languages(direction)
+        with self._lock:
             t = time.perf_counter()
-            samples = self.tts.synthesize(translation, lang=dst, voice_name=voice)
-            timings["tts"] = time.perf_counter() - t
+            for transcript in phrases(self.asr.long_segments(pcm, language=src)):
+                if stop is not None and stop.is_set():
+                    return
+                timings = {"asr": time.perf_counter() - t}
+                yield self._dub(transcript, direction, voice, timings)
+                t = time.perf_counter()
+
+    def _dub(self, transcript: str, direction: str, voice: str | None, timings: dict[str, float]) -> Result:
+        """Translate and speak a transcript. Call with the lock held."""
+        src, dst = DIRECTIONS[direction]
+
+        t = time.perf_counter()
+        translation = self.mt.translate(transcript, src, dst)
+        timings["mt"] = time.perf_counter() - t
+
+        t = time.perf_counter()
+        samples = self.tts.synthesize(translation, lang=dst, voice_name=voice)
+        timings["tts"] = time.perf_counter() - t
 
         timings["output_audio_s"] = duration_seconds(samples, TTS_SAMPLE_RATE)
-        timings["total"] = timings["decode"] + timings["asr"] + timings["mt"] + timings["tts"]
+        timings["total"] = sum(timings.get(k, 0.0) for k in ("decode", "asr", "mt", "tts"))
         timings = {k: round(v, 3) for k, v in timings.items()}
 
         return Result(
@@ -91,3 +115,9 @@ class Pipeline:
         with self._lock:
             samples = self.tts.synthesize(text, lang=lang)
         return to_wav_bytes(samples, TTS_SAMPLE_RATE)
+
+
+def _languages(direction: str) -> tuple[str, str]:
+    if direction not in DIRECTIONS:
+        raise ValueError(f"direction must be one of {sorted(DIRECTIONS)}")
+    return DIRECTIONS[direction]

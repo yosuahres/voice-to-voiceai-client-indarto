@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { startPhraseRecorder, type PhraseRecorder } from "./phrase-recorder";
 
 type Direction = "id-ru" | "ru-id";
@@ -13,6 +13,13 @@ type Entry = {
   audio: AudioBuffer | null;
   pending: boolean;
 };
+type VideoJob = { title: string; message: string; running: boolean };
+type VideoEvent =
+  | { type: "status"; message: string }
+  | { type: "video"; title: string; duration_s: number }
+  | { type: "phrase"; transcript: string; translation: string; audio_base64: string }
+  | { type: "error"; message: string }
+  | { type: "done" };
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 // ngrok's free plan serves a browser warning page instead of the API unless this header is sent.
@@ -23,6 +30,22 @@ const MIC_RESUME_DELAY_MS = 300;
 
 function bytesFromBase64(base64: string): ArrayBuffer {
   return Uint8Array.from(atob(base64), (char) => char.charCodeAt(0)).buffer;
+}
+
+// The API streams one JSON event per line, with blank keep-alive lines in between.
+async function* readEvents(body: ReadableStream<Uint8Array>): AsyncGenerator<VideoEvent> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+    for (const line of lines) if (line.trim()) yield JSON.parse(line) as VideoEvent;
+  }
+  if (buffer.trim()) yield JSON.parse(buffer) as VideoEvent;
 }
 
 function voiceLabel(voice: string): string {
@@ -63,6 +86,7 @@ const icons = {
   speaker: "M4 9v6h4l5 4V5L8 9zm12.5-.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12",
   expand: "M14 4h6v6M20 4l-7 7M10 20H4v-6M4 20l7-7",
   collapse: "M20 10h-6V4M14 10l7-7M4 14h6v6M10 14l-7 7",
+  play: "M8 5.5v13l10-6.5z",
 };
 
 function MicIcon({ listening }: { listening: boolean }) {
@@ -96,6 +120,9 @@ export default function Home() {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [columns, setColumns] = useState<[Language, Language] | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
+  const [videoUrl, setVideoUrl] = useState("");
+  const [video, setVideo] = useState<VideoJob | null>(null);
+  const videoRequest = useRef<AbortController | null>(null);
   const voicePicker = useRef<HTMLDivElement | null>(null);
   const panels = useRef<(HTMLDivElement | null)[]>([]);
   const recorder = useRef<PhraseRecorder | null>(null);
@@ -115,6 +142,12 @@ export default function Home() {
   const latestAudio = finished.findLast((entry) => entry.audio)?.audio;
   const status = error
     ? error
+    : video
+      ? video.running
+        ? video.message
+        : playing
+          ? "Playing translation…"
+          : "Video translated"
     : playing && (!headphones || !listening)
       ? listening
         ? "Playing translation… mic paused"
@@ -157,6 +190,7 @@ export default function Home() {
   useEffect(
     () => () => {
       recorder.current?.stop(false);
+      videoRequest.current?.abort();
       window.clearTimeout(micResume.current);
       void output.current?.close();
     },
@@ -325,9 +359,66 @@ export default function Home() {
     else void startListening();
   }
 
+  async function translateVideo(event: FormEvent) {
+    event.preventDefault();
+    const url = videoUrl.trim();
+    if (!url || videoRequest.current) return;
+    unlockAudio();
+    const { direction: videoDirection, voice: videoVoice } = settings.current;
+    const controller = new AbortController();
+    const sessionId = session.current;
+    videoRequest.current = controller;
+    setError("");
+    setVoiceMenuOpen(false);
+    setVideo({ title: "", message: "Starting…", running: true });
+    setColumns([sourceOf(videoDirection), sourceOf(videoDirection) === "Indonesian" ? "Russian" : "Indonesian"]);
+    try {
+      const form = new FormData();
+      form.append("url", url);
+      form.append("direction", videoDirection);
+      form.append("voice", videoVoice);
+      const response = await fetch(`${API_URL}/youtube`, {
+        method: "POST",
+        headers: API_HEADERS,
+        body: form,
+        signal: controller.signal,
+      });
+      if (!response.ok || !response.body) throw new Error((await response.text()) || `Video translation failed (${response.status})`);
+      for await (const message of readEvents(response.body)) {
+        if (sessionId !== session.current) return;
+        if (message.type === "status") setVideo((job) => job && { ...job, message: message.message });
+        else if (message.type === "video") setVideo((job) => job && { ...job, title: message.title });
+        else if (message.type === "error") setError(message.message);
+        else if (message.type === "phrase") {
+          const audio = await decodeSpeech(message.audio_base64);
+          if (sessionId !== session.current) return;
+          const entry: Entry = {
+            id: nextId.current++,
+            source: sourceOf(videoDirection),
+            sourceText: message.transcript,
+            translatedText: message.translation,
+            audio,
+            pending: false,
+          };
+          setEntries((current) => [...current, entry]);
+          if (audio) enqueuePlayback(audio);
+        }
+      }
+    } catch (cause) {
+      if (sessionId !== session.current) return;
+      setError(cause instanceof Error ? cause.message : "Video translation failed.");
+    } finally {
+      if (videoRequest.current === controller) videoRequest.current = null;
+      if (sessionId === session.current) setVideo((job) => job && { ...job, running: false });
+    }
+  }
+
   function endSession() {
     stopPlayback();
     stopListening(false);
+    videoRequest.current?.abort();
+    videoRequest.current = null;
+    setVideo(null);
     session.current++;
     requests.current = Promise.resolve();
     setEntries([]);
@@ -383,6 +474,7 @@ export default function Home() {
                       </button>
                     ),
                   )}
+                  {video?.running && <PendingLine />}
                 </div>
               </div>
             </section>
@@ -394,9 +486,11 @@ export default function Home() {
             <Icon path={icons.back} />
             Go Back
           </button>
-          <button className={`${micClass} small`} onClick={toggleListening} aria-label={micLabel} aria-pressed={listening}>
-            <MicIcon listening={listening} />
-          </button>
+          {!video && (
+            <button className={`${micClass} small`} onClick={toggleListening} aria-label={micLabel} aria-pressed={listening}>
+              <MicIcon listening={listening} />
+            </button>
+          )}
           <button className="pill-button outline" onClick={downloadTranscript} disabled={!finished.length}>
             <Icon path={icons.download} />
             Download
@@ -412,9 +506,11 @@ export default function Home() {
 
         <footer className="session-footer">
           <Logo className="footer-logo" />
-          <p className={`status ${error ? "failed" : listening ? "live" : ""}`}>{status}</p>
+          <p className={`status ${error ? "failed" : listening || video?.running ? "live" : ""}`} title={video?.title}>
+            {status}
+          </p>
           <div className="direction-pill">
-            <button className="direction" onClick={swapLanguages} title="Switch languages">
+            <button className="direction" onClick={swapLanguages} title="Switch languages" disabled={Boolean(video)}>
               {sourceLanguage}
               <Icon path={icons.arrow} />
               {targetLanguage}
@@ -520,6 +616,23 @@ export default function Home() {
               <MicIcon listening={listening} />
             </button>
           </div>
+
+          <p className="divider">or translate a YouTube video</p>
+          <form className="video-form" onSubmit={(event) => void translateVideo(event)}>
+            <input
+              type="url"
+              inputMode="url"
+              aria-label="YouTube link"
+              placeholder="Paste a YouTube link"
+              value={videoUrl}
+              onChange={(event) => setVideoUrl(event.target.value)}
+              required
+            />
+            <button className="pill-button outline" type="submit" disabled={!videoUrl.trim()}>
+              <Icon path={icons.play} />
+              Translate
+            </button>
+          </form>
           {error && <p className="error">{error}</p>}
         </section>
       </div>

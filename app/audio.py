@@ -4,6 +4,7 @@ import io
 import shutil
 import subprocess
 import wave
+from pathlib import Path
 
 import numpy as np
 
@@ -17,11 +18,20 @@ def ensure_ffmpeg() -> None:
 
 def decode_to_pcm16k(data: bytes) -> np.ndarray:
     """Decode any audio container (wav, webm, ogg, m4a, mp3) to mono float32 at 16 kHz."""
+    return _ffmpeg_pcm16k("pipe:0", data)
+
+
+def decode_file_to_pcm16k(path: Path) -> np.ndarray:
+    """Same as decode_to_pcm16k, for a file on disk (m4a cannot always be read from a pipe)."""
+    return _ffmpeg_pcm16k(str(path), None)
+
+
+def _ffmpeg_pcm16k(source: str, data: bytes | None) -> np.ndarray:
     ensure_ffmpeg()
     proc = subprocess.run(
         [
             "ffmpeg", "-hide_banner", "-loglevel", "error",
-            "-i", "pipe:0",
+            "-i", source,
             "-f", "s16le", "-acodec", "pcm_s16le", "-ac", "1", "-ar", str(ASR_SAMPLE_RATE),
             "pipe:1",
         ],

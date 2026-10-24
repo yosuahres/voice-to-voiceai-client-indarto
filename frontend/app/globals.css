@@ -154,3 +154,20 @@ h1 { margin: 0 0 30px; font-size: clamp(30px, 3.4vw, 36px); font-weight: 500; le
 .switch[aria-checked="true"] { border-color: var(--blue); background: var(--blue); }
 .switch[aria-checked="true"]::after { background: #fff; transform: translate(22px, -50%); }
 @media (max-width: 620px) { .toggle-row { font-size: 15px; } }
+
+.divider { display: flex; align-items: center; gap: 14px; margin: 56px 0 0; color: var(--muted); font-size: 14px; }
+.divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.video-form { display: flex; gap: 9px; margin-top: 18px; }
+.video-form input { flex: 1; min-width: 0; height: 56px; padding: 0 22px; border: 1px solid var(--line); border-radius: 28px; color: var(--ink); background: #fff; font: inherit; font-size: 17px; }
+.video-form input::placeholder { color: #9aa2b1; }
+.video-form input:hover { border-color: #cfd5df; }
+.video-form input:focus { border-color: var(--blue); outline: none; box-shadow: 0 0 0 3px #3478e51f; }
+.video-form .pill-button { flex: none; height: 56px; border-radius: 28px; }
+.video-form .pill-button .icon { fill: currentColor; stroke: none; }
+.status { max-width: min(460px, 100%); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 620px) {
+  .divider { margin-top: 44px; }
+  .video-form input, .video-form .pill-button { height: 48px; font-size: 15px; }
+  .video-form input { padding: 0 16px; }
+  .video-form .pill-button { padding: 0 16px; }
+}

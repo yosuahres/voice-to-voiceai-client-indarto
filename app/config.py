@@ -22,6 +22,9 @@ class Settings:
     tts_steps: int = int(os.getenv("TTS_STEPS", "8"))
     tts_speed: float = float(os.getenv("TTS_SPEED", "1.0"))
 
+    # YouTube: longer videos are refused. CPU translation runs at roughly real time or slower.
+    youtube_max_minutes: float = float(os.getenv("YOUTUBE_MAX_MINUTES", "30"))
+
     # Server
     host: str = os.getenv("HOST", "0.0.0.0")
     port: int = int(os.getenv("PORT", "8000"))

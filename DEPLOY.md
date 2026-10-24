@@ -12,8 +12,10 @@ Browser ──> Vercel (frontend) ──> https://xxxx.trycloudflare.com ──>
 Install the tools:
 
 ```powershell
-winget install Python.Python.3.12 Gyan.FFmpeg Ollama.Ollama Git.Git Cloudflare.cloudflared
+winget install Python.Python.3.12 Gyan.FFmpeg Ollama.Ollama Git.Git Cloudflare.cloudflared DenoLand.Deno
 ```
+
+Deno is only used to download YouTube videos (YouTube needs a JavaScript runtime).
 
 **Close PowerShell and open a new one** so the new tools are on PATH. Then:
 
@@ -103,4 +105,5 @@ changed variable has no effect until the next build.
 | `Model 'qwen3:4b-instruct' not pulled` | Run `ollama pull qwen3:4b-instruct`. |
 | `ffmpeg not found on PATH` | Open a new PowerShell window after installing, or reinstall with `winget install Gyan.FFmpeg`. |
 | Error 524 from Cloudflare | One request took over 100 s. Use `WHISPER_MODEL=small` and close other apps. |
+| YouTube says "Could not download the video" | YouTube changes often. Update the downloader: `.venv\Scripts\pip install -U "yt-dlp[default]"`, then restart the API. |
 | Mic button does nothing | Allow microphone access for the site in the browser's address bar. |
