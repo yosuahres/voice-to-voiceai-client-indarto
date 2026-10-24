@@ -80,6 +80,11 @@ pill at the bottom to switch direction mid-conversation.
 Set `NEXT_PUBLIC_API_URL` in `frontend/.env.local` if the API is not at
 `http://localhost:8000` (see [`frontend/.env.example`](frontend/.env.example)).
 
+## Deploy
+
+To run the API on a Windows PC and the frontend on Vercel through a Cloudflare tunnel,
+follow [DEPLOY.md](DEPLOY.md).
+
 ## Settings (environment variables)
 
 | Variable | Default | Notes |
