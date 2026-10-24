@@ -18,8 +18,7 @@ button, select { font: inherit; color: inherit; }
 .page { min-height: 100vh; padding: 10px; }
 .card { position: relative; min-height: calc(100vh - 20px); padding: 16vh 24px 64px; border: 1px solid #edf0f4; border-radius: 28px; background: #fff; box-shadow: 0 1px 3px #1b2a4a0d; }
 .translator { width: min(696px, 100%); margin: 0 auto; text-align: center; }
-h1 { margin: 0; font-size: clamp(30px, 3.4vw, 36px); font-weight: 500; letter-spacing: -.02em; }
-.subtitle { margin: 12px 0 26px; color: var(--muted); font-size: 18px; }
+h1 { margin: 0 0 30px; font-size: clamp(30px, 3.4vw, 36px); font-weight: 500; letter-spacing: -.02em; }
 
 .language-row { display: grid; grid-template-columns: 1fr 56px 1fr; gap: 9px; align-items: center; }
 .select-pill { position: relative; display: block; }
@@ -64,7 +63,6 @@ h1 { margin: 0; font-size: clamp(30px, 3.4vw, 36px); font-weight: 500; letter-sp
 @media (max-width: 620px) {
   .page { padding: 0; }
   .card { position: relative; min-height: 100vh; padding: 56px 16px 40px; border-radius: 0; border: 0; }
-  .subtitle { font-size: 15px; }
   .language-row { grid-template-columns: 1fr 44px 1fr; gap: 6px; }
   .select-pill select { height: 48px; padding: 0 36px 0 16px; font-size: 15px; }
   .chevron { right: 14px; }

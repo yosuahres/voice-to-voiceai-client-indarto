@@ -439,7 +439,6 @@ export default function Home() {
         <Logo className="card-logo" />
         <section className="translator">
           <h1>Live Translate</h1>
-          <p className="subtitle">Speak in one language and hear it dubbed in the other.</p>
 
           <div className="language-row">
             <label className="select-pill">
